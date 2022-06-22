@@ -16,7 +16,7 @@
 #define LGFX_USE_V1
 
 #define LV_DOUBLE_BUFFER
-#define LANDSCAPE // if changing this, make sure to change the music demo in menuconfig
+#define LANDSCAPE // if changing this, make sure to uncheck landscape in menuconfig -> components -> lvgl -> demos -> music
 
 #if CONFIG_IDF_TARGET_ESP32S3
   #include "LGFX_MakerFabs_Parallel_S3.hpp"
@@ -36,6 +36,13 @@
   #endif
 #else
 #error I don't know which board you're talking to! . ./set-target esp32s2 or esp32s3
+#endif
+
+// Uncomment to test benchmark speed without display refresh. You won't see any output on screen, look in the log window to see results
+//#define DISABLE_FLUSH_DURING_BENCHMARK
+
+#if defined(DISABLE_FLUSH_DURING_BENCHMARK) && !CONFIG_LV_USE_LOG
+#error You'll need to enable LVGL logging (and probably set log to printf) in the menuconfig to get results.
 #endif
 
 static LGFX lcd;
@@ -72,13 +79,15 @@ typedef struct demo_button
 static demo_button_t demos[] = {
     {"Music", lv_demo_music},
     {"Widgets", lv_demo_widgets},
-    {"Keypad\nEncoder", lv_demo_keypad_encoder},
+    {"Encoder", lv_demo_keypad_encoder},
     {"Benchmark", lv_demo_benchmark},
     {"Stress", lv_demo_stress}
 };
 
 
 static lv_obj_t *demo_selection_panel;
+
+static bool disable_flush = false;
 
 /*** Function declaration ***/
 static void display_flush(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color_p);
@@ -95,6 +104,16 @@ static void button_event_handler(lv_event_t *e)
         function_pointer_t demo_function = (function_pointer_t)lv_event_get_user_data(e);
         if (demo_function)
         {
+            lv_obj_t *label = lv_obj_get_child(btn, 0);
+            ESP_LOGI(TAG, "Starting %s", lv_label_get_text(label));
+
+#ifdef DISABLE_FLUSH_DURING_BENCHMARK
+            if (demo_function == lv_demo_benchmark)
+            {
+                ESP_LOGI(TAG, "Starting benchmark with flush disabled. Wait a couple minutes for benchmark results. They'll be here soon.");
+                disable_flush = true;
+            }
+#endif
             demo_function();
             lv_obj_del(demo_selection_panel);
         }
@@ -152,7 +171,7 @@ extern "C" void app_main(void)
 
     // Create buttons to pick which demo
     demo_selection_panel = lv_obj_create(lv_scr_act());
-    lv_obj_set_size(demo_selection_panel, 480, 120);
+    lv_obj_set_size(demo_selection_panel, lv_pct(100), 120);
     lv_obj_set_scroll_snap_x(demo_selection_panel, LV_SCROLL_SNAP_CENTER);
     lv_obj_set_flex_flow(demo_selection_panel, LV_FLEX_FLOW_ROW);
     lv_obj_align(demo_selection_panel, LV_ALIGN_CENTER, 0, 20);
@@ -182,6 +201,13 @@ extern "C" void app_main(void)
 /*** Display callback to flush the buffer to screen ***/
 static void display_flush(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color_p)
 {
+#ifdef DISABLE_FLUSH_DURING_BENCHMARK
+    if (disable_flush)
+    {
+        lv_disp_flush_ready(disp);
+        return;
+    }
+#endif
     uint32_t w = (area->x2 - area->x1 + 1);
     uint32_t h = (area->y2 - area->y1 + 1);
 
