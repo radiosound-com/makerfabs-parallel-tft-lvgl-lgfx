@@ -10,12 +10,12 @@
 #define TAG "Demo"
 
 // these do not have to be the same, not sure what is optimal
-#define TASK_SLEEP_PERIOD_MS 1
-#define LV_TICK_PERIOD_MS 1
+#define TASK_SLEEP_PERIOD_MS 4
+#define LV_TICK_PERIOD_MS 4
 
 #define LGFX_USE_V1
 
-//#define LV_DOUBLE_BUFFER
+#define LV_DOUBLE_BUFFER
 #define LANDSCAPE // if changing this, make sure to change the music demo in menuconfig
 
 #if CONFIG_IDF_TARGET_ESP32S3
