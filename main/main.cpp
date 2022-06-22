@@ -1,26 +1,42 @@
+// based on https://github.com/sukesh-ak/LVGL8-WT32-SC01-IDF
+// adapted for MakerFabs parallel TFT dev boards (S2 and S3)
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "sdkconfig.h"
 
-//#include <stdio.h>
-//#include <string.h>
+#include "esp_log.h"
 
-// these do not have to be the same
+#define TAG "Demo"
+
+// these do not have to be the same, not sure what is optimal
 #define TASK_SLEEP_PERIOD_MS 1
 #define LV_TICK_PERIOD_MS 1
 
 #define LGFX_USE_V1
 
 //#define LV_DOUBLE_BUFFER
-#define LANDSCAPE
+#define LANDSCAPE // if changing this, make sure to change the music demo in menuconfig
 
-#ifdef LANDSCAPE
-#define LV_BUFFER_SIZE 80 /* if not double buffering, then buf will be 2x this */
+#if CONFIG_IDF_TARGET_ESP32S3
+  #include "LGFX_MakerFabs_Parallel_S3.hpp"
+  // if you get "will not fit, dram segment overflow" reduce this
+  #ifdef LANDSCAPE
+    #define LV_BUFFER_SIZE 80 /* if not double buffering, then buf will be 2x this */
+  #else
+    #define LV_BUFFER_SIZE 120 /* if not double buffering, then buf will be 2x this */
+  #endif
+#elif CONFIG_IDF_TARGET_ESP32S2
+  #include "LGFX_MakerFabs_Parallel_S2.hpp"
+  // if you get "will not fit, dram segment overflow" reduce this
+  #ifdef LANDSCAPE
+    #define LV_BUFFER_SIZE 40 /* if not double buffering, then buf will be 2x this */
+  #else
+    #define LV_BUFFER_SIZE 60 /* if not double buffering, then buf will be 2x this */
+  #endif
 #else
-#define LV_BUFFER_SIZE 120 /* if not double buffering, then buf will be 2x this */
+#error I don't know which board you're talking to! . ./set-target esp32s2 or esp32s3
 #endif
-
-#include "LGFX_MakerFabs_Parallel.hpp"
 
 static LGFX lcd;
 
@@ -44,12 +60,48 @@ static lv_color_t buf2[screenWidth * LV_BUFFER_SIZE];
 static lv_color_t buf[screenWidth * LV_BUFFER_SIZE * 2];
 #endif
 
+typedef void (*function_pointer_t)(void);
+
+typedef struct demo_button
+{
+    const char * const name;
+    function_pointer_t function;
+} demo_button_t;
+
+/* List of buttons to create, and the associated demo function that needs to be called when clicked */
+static demo_button_t demos[] = {
+    {"Music", lv_demo_music},
+    {"Widgets", lv_demo_widgets},
+    {"Keypad\nEncoder", lv_demo_keypad_encoder},
+    {"Benchmark", lv_demo_benchmark},
+    {"Stress", lv_demo_stress}
+};
+
+
+static lv_obj_t *demo_selection_panel;
+
 /*** Function declaration ***/
 static void display_flush(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color_p);
 static void touchpad_read(lv_indev_drv_t *indev_driver, lv_indev_data_t *data);
 static void lv_tick_task(void *arg);
 
-extern "C" void app_main(void)
+/* Button event handler */
+static void button_event_handler(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t *btn = lv_event_get_target(e);
+    if (code == LV_EVENT_CLICKED)
+    {
+        function_pointer_t demo_function = (function_pointer_t)lv_event_get_user_data(e);
+        if (demo_function)
+        {
+            demo_function();
+            lv_obj_del(demo_selection_panel);
+        }
+    }
+}
+
+static void init_lvgl_lgfx()
 {
     lcd.init();
     lv_init();
@@ -90,12 +142,36 @@ extern "C" void app_main(void)
     esp_timer_handle_t periodic_timer;
     ESP_ERROR_CHECK(esp_timer_create(&periodic_timer_args, &periodic_timer));
     ESP_ERROR_CHECK(esp_timer_start_periodic(periodic_timer, LV_TICK_PERIOD_MS * 1000));
+}
 
-    // Pick which demo
-    //lv_demo_music();
-    //lv_demo_widgets();
-    lv_demo_benchmark();
+extern "C" void app_main(void)
+{
+    init_lvgl_lgfx();
 
+    ESP_LOGI(TAG, "Ready to start a demo. Tap a button on screen. Reset the board with the reset button or Ctrl+T Ctrl+R to pick a new one.");
+
+    // Create buttons to pick which demo
+    demo_selection_panel = lv_obj_create(lv_scr_act());
+    lv_obj_set_size(demo_selection_panel, 480, 120);
+    lv_obj_set_scroll_snap_x(demo_selection_panel, LV_SCROLL_SNAP_CENTER);
+    lv_obj_set_flex_flow(demo_selection_panel, LV_FLEX_FLOW_ROW);
+    lv_obj_align(demo_selection_panel, LV_ALIGN_CENTER, 0, 20);
+
+    for(auto& demo : demos)
+    {
+        lv_obj_t * btn = lv_btn_create(demo_selection_panel);
+        lv_obj_set_size(btn, 120, lv_pct(100));
+
+        lv_obj_add_event_cb(btn, button_event_handler, LV_EVENT_CLICKED, (void*)demo.function);
+
+        lv_obj_t * label = lv_label_create(btn);
+        lv_label_set_text_static(label, demo.name);
+
+        lv_obj_center(label);
+    }
+    lv_obj_update_snap(demo_selection_panel, LV_ANIM_ON);
+
+    /* UI thread */
     while (true)
     {
         lv_timer_handler(); /* let the GUI do its work */

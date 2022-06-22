@@ -1,5 +1,4 @@
-// based on https://github.com/lovyan03/LovyanGFX/blob/experimental/src/lgfx_user/LGFX_ESP32S2_MakerabsParallelTFTwithTouch.hpp
-// and modified for the S3 version's pins
+// from https://github.com/lovyan03/LovyanGFX/blob/master/src/lgfx_user/LGFX_ESP32S2_MakerabsParallelTFTwithTouch.hpp
 #pragma once
 
 #define LGFX_USE_V1
@@ -72,12 +71,12 @@ public:
     {
       auto cfg = _bus_instance.config();
 
-      cfg.freq_write = 20000000;
+      cfg.freq_write = 40000000;
       cfg.pin_wr = 35;
-      cfg.pin_rd = 48;
+      cfg.pin_rd = 34;
       cfg.pin_rs = 36;
 
-      cfg.pin_d0 = 47;
+      cfg.pin_d0 = 33;
       cfg.pin_d1 = 21;
       cfg.pin_d2 = 14;
       cfg.pin_d3 = 13;
@@ -126,3 +125,4 @@ public:
     setPanel(&_panel_instance);
   }
 };
+

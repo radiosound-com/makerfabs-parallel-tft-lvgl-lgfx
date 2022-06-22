@@ -1,0 +1,15 @@
+if [[ "$@" != "esp32s2" && "$@" != "esp32s3" ]]; then
+    echo "$(tput setaf 1)This project isn't set up for anything but esp32s2 and esp32s3 right now$(tput sgr0)"
+else
+    export IDF_TARGET="$@"
+
+    OPTS=("-Bbuild_$IDF_TARGET" "-DIDF_TARGET=$IDF_TARGET" "-DSDKCONFIG=build_$IDF_TARGET/sdkconfig" "-DSDKCONFIG_DEFAULTS=sdkconfig.defaults.$IDF_TARGET")
+
+    if [[ -d "build_$IDF_TARGET" ]]; then
+        echo "Ready to build for $IDF_TARGET"
+        echo "./build [rest of idf.py build args]"
+        echo "e.g. ./build flash monitor"
+    else
+        idf.py ${OPTS[@]} set-target "$@"
+    fi
+fi
