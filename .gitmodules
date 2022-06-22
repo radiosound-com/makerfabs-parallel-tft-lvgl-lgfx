@@ -1,0 +1,8 @@
+[submodule "components/LovyanGFX"]
+	path = components/LovyanGFX
+	url = https://github.com/radiosound-com/LovyanGFX.git
+	branch = ftab/idf5
+[submodule "components/lvgl"]
+	path = components/lvgl
+	url = https://github.com/radiosound-com/lvgl.git
+	branch = v8.2-demos
