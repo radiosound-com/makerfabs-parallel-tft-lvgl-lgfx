@@ -56,13 +56,12 @@ static const uint16_t screenHeight = 320;
 static const uint16_t screenWidth = 320;
 static const uint16_t screenHeight = 480;
 #endif
-static lv_disp_draw_buf_t draw_buf;
 
 #ifdef LV_DOUBLE_BUFFER
-static lv_color_t buf[screenWidth * LV_BUFFER_SIZE];
-static lv_color_t buf2[screenWidth * LV_BUFFER_SIZE];
+static uint16_t buf[screenWidth * LV_BUFFER_SIZE];
+static uint16_t buf2[screenWidth * LV_BUFFER_SIZE];
 #else
-static lv_color_t buf[screenWidth * LV_BUFFER_SIZE * 2];
+static uint16_t buf[screenWidth * LV_BUFFER_SIZE * 2];
 #endif
 
 typedef void (*function_pointer_t)(void);
@@ -88,15 +87,15 @@ static lv_obj_t *demo_selection_panel;
 static bool disable_flush = false;
 
 /*** Function declaration ***/
-static void display_flush(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color_p);
-static void touchpad_read(lv_indev_drv_t *indev_driver, lv_indev_data_t *data);
+static void display_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *color_p);
+static void touchpad_read(lv_indev_t *indev_driver, lv_indev_data_t *data);
 static void lv_tick_task(void *arg);
 
 /* Button event handler */
 static void button_event_handler(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
-    lv_obj_t *btn = lv_event_get_target(e);
+    lv_obj_t *btn = (lv_obj_t*)lv_event_get_target(e);
     if (code == LV_EVENT_CLICKED)
     {
         function_pointer_t demo_function = (function_pointer_t)lv_event_get_user_data(e);
@@ -118,10 +117,17 @@ static void button_event_handler(lv_event_t *e)
     }
 }
 
+/* tell LVGL how to tell how much time has passed */
+static uint32_t my_tick_get_cb(void)
+{
+    return esp_timer_get_time() / 1000;
+}
+
 static void init_lvgl_lgfx()
 {
     lcd.init();
     lv_init();
+    lv_tick_set_cb(my_tick_get_cb);
 
 #ifdef LANDSCAPE
     // Rotate to landscape
@@ -130,35 +136,19 @@ static void init_lvgl_lgfx()
 
     //lcd.setBrightness(10);
 
+    /*** LVGL : Setup & Initialize the display device driver ***/
+    static lv_display_t *disp_drv = lv_display_create(screenWidth, screenHeight);
+    lv_display_set_flush_cb(disp_drv, display_flush);
 #ifdef LV_DOUBLE_BUFFER
-    lv_disp_draw_buf_init(&draw_buf, buf, buf2, screenWidth * LV_BUFFER_SIZE);
+    lv_display_set_buffers(disp_drv, buf, buf2, screenWidth * LV_BUFFER_SIZE * sizeof(uint16_t), LV_DISPLAY_RENDER_MODE_PARTIAL);
 #else
-    lv_disp_draw_buf_init(&draw_buf, buf, NULL, screenWidth * LV_BUFFER_SIZE * 2);
+    lv_display_set_buffers(disp_drv, buf, NULL, screenWidth * LV_BUFFER_SIZE * sizeof(uint16_t), LV_DISPLAY_RENDER_MODE_PARTIAL);
 #endif
 
-    /*** LVGL : Setup & Initialize the display device driver ***/
-    static lv_disp_drv_t disp_drv;
-    lv_disp_drv_init(&disp_drv);
-    disp_drv.hor_res = screenWidth;
-    disp_drv.ver_res = screenHeight;
-    disp_drv.flush_cb = display_flush;
-    disp_drv.draw_buf = &draw_buf;
-    lv_disp_drv_register(&disp_drv);
-
     /*** LVGL : Setup & Initialize the input device driver ***/
-    static lv_indev_drv_t indev_drv;
-    lv_indev_drv_init(&indev_drv);
-    indev_drv.type = LV_INDEV_TYPE_POINTER;
-    indev_drv.read_cb = touchpad_read;
-    lv_indev_drv_register(&indev_drv);
-
-    /* Create and start a periodic timer interrupt to call lv_tick_inc */
-    const esp_timer_create_args_t periodic_timer_args = {
-        .callback = &lv_tick_task,
-        .name = "periodic_gui"};
-    esp_timer_handle_t periodic_timer;
-    ESP_ERROR_CHECK(esp_timer_create(&periodic_timer_args, &periodic_timer));
-    ESP_ERROR_CHECK(esp_timer_start_periodic(periodic_timer, LV_TICK_PERIOD_MS * 1000));
+    static lv_indev_t *indev_drv = lv_indev_create();
+    lv_indev_set_type(indev_drv, LV_INDEV_TYPE_POINTER);
+    lv_indev_set_read_cb(indev_drv, touchpad_read);
 }
 
 extern "C" void app_main(void)
@@ -197,12 +187,12 @@ extern "C" void app_main(void)
 }
 
 /*** Display callback to flush the buffer to screen ***/
-static void display_flush(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color_p)
+static void display_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *color_p)
 {
 #ifdef DISABLE_FLUSH_DURING_BENCHMARK
     if (disable_flush)
     {
-        lv_disp_flush_ready(disp);
+        lv_display_flush_ready(disp);
         return;
     }
 #endif
@@ -211,14 +201,14 @@ static void display_flush(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t
 
     lcd.startWrite();
     lcd.setAddrWindow(area->x1, area->y1, w, h);
-    lcd.writePixels((uint16_t *)&color_p->full, w * h, true);
+    lcd.writePixels((uint16_t *)color_p, w * h, true);
     lcd.endWrite();
 
-    lv_disp_flush_ready(disp);
+    lv_display_flush_ready(disp);
 }
 
 /*** Touchpad callback to read the touchpad ***/
-static void touchpad_read(lv_indev_drv_t *indev_driver, lv_indev_data_t *data)
+static void touchpad_read(lv_indev_t *indev_driver, lv_indev_data_t *data)
 {
     uint16_t touchX, touchY;
     bool touched = lcd.getTouch(&touchX, &touchY);
@@ -235,11 +225,4 @@ static void touchpad_read(lv_indev_drv_t *indev_driver, lv_indev_data_t *data)
         data->point.x = touchX;
         data->point.y = touchY;
     }
-}
-
-/* Setting up tick task for lvgl */
-static void lv_tick_task(void *arg)
-{
-    (void)arg;
-    lv_tick_inc(LV_TICK_PERIOD_MS);
 }
