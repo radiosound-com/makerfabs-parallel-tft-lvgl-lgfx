@@ -7,3 +7,5 @@ set(CMAKE_CXX_STANDARD 17)
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
 project(MakerFabs-Parallel-TFT)
+
+idf_build_set_property(COMPILE_OPTIONS "-Wno-array-bounds" APPEND)

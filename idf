@@ -1,7 +1,0 @@
-if [ -z "$IDF_TARGET" ]; then
-    echo "$(tput setaf 1)No target set\nsource ./set-target esp32s2\nsource ./set-target esp32s3$(tput sgr0)"
-else
-    OPTS=("-Bbuild_$IDF_TARGET" "-DIDF_TARGET=$IDF_TARGET" "-DSDKCONFIG=build_$IDF_TARGET/sdkconfig" "-DSDKCONFIG_DEFAULTS=sdkconfig.defaults.$IDF_TARGET")
-
-    idf.py ${OPTS[@]} "$@"
-fi

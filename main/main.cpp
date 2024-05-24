@@ -9,9 +9,7 @@
 
 #define TAG "Demo"
 
-// these do not have to be the same, not sure what is optimal
-#define TASK_SLEEP_PERIOD_MS 4
-#define LV_TICK_PERIOD_MS 4
+#define LV_TICK_PERIOD_MS 1
 
 #define LGFX_USE_V1
 
@@ -35,7 +33,7 @@
     #define LV_BUFFER_SIZE 60 /* if not double buffering, then buf will be 2x this */
   #endif
 #else
-#error I don't know which board you're talking to! . ./set-target esp32s2 or esp32s3
+#error I don't know which board you're talking to! idf.py set-target esp32s2 or esp32s3
 #endif
 
 // Uncomment to test benchmark speed without display refresh. You won't see any output on screen, look in the log window to see results
@@ -193,8 +191,8 @@ extern "C" void app_main(void)
     /* UI thread */
     while (true)
     {
-        lv_timer_handler(); /* let the GUI do its work */
-        vTaskDelay(pdMS_TO_TICKS(TASK_SLEEP_PERIOD_MS));
+        /* let the GUI do its work */
+        vTaskDelay(pdMS_TO_TICKS(lv_timer_handler()));
     }
 }
 
